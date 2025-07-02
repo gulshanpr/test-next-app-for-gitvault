@@ -35,6 +35,7 @@ jobs:
       env:
         API_URL: "https://f64e-2409-40d0-2023-be3c-c5ae-5798-71ef-c4ae.ngrok-free.app/api/my-upload/upload"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        HMAC_SECRET: ${{ secrets.HMAC_SECRET }}
       run: |
         echo "🔄 Uploading archive to $API_URL..."
 
@@ -59,6 +60,47 @@ jobs:
 
         echo "supabaseKey=$SUPA_KEY" >> $GITHUB_OUTPUT
         echo "signedUrl=$SIGNED_URL" >> $GITHUB_OUTPUT
+
+        # 🔐 Generate HMAC signature
+        REPO_COMMIT="${GITHUB_REPOSITORY}:${{ steps.commit.outputs.hash }}"
+        HMAC_SIG=$(echo -n "$REPO_COMMIT" | openssl dgst -sha256 -hmac "${{ secrets.HMAC_SECRET }}" | sed 's/^.* //')
+        echo "sig=$HMAC_SIG" >> $GITHUB_OUTPUT
+
+    - name: 🔁 Trigger CI #2 Securely
+      if: ${{ success() }}
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "🚦 Validating inputs before triggering CI #2..."
+
+        if [[ -z "${{ steps.upload.outputs.supabaseKey }}" || "${{ steps.upload.outputs.supabaseKey }}" == "null" ]]; then
+          echo "❌ Missing supabaseKey. Skipping CI #2 trigger."
+          exit 0
+        fi
+
+        if [[ -z "${{ steps.hmac.outputs.sig }}" || "${{ steps.hmac.outputs.sig }}" == "null" ]]; then
+          echo "❌ Missing HMAC signature. Skipping CI #2 trigger."
+          exit 0
+        fi
+
+        echo "✅ All required inputs are present. Triggering CI #2..."
+
+        curl -s -X POST \
+          -H "Authorization: token $GH_TOKEN" \
+          -H "Accept: application/vnd.github+json" \
+          https://api.github.com/repos/${{ github.repository }}/actions/workflows/ci-two.yml/dispatches \
+          -d @- <<EOF
+        {
+          "ref": "main",
+          "inputs": {
+            "repo": "${{ github.repository }}",
+            "commit": "${{ steps.commit.outputs.hash }}",
+            "supabaseKey": "${{ steps.upload.outputs.supabaseKey }}",
+            "signedUrl": "${{ steps.upload.outputs.signedUrl }}",
+            "sig": "${{ steps.hmac.outputs.sig }}"
+          }
+        }
+        EOF
 
     - name: Update .gitvault and README
       if: success()
