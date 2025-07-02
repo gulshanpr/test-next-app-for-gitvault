@@ -5,7 +5,6 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
-
 jobs:
   backup:
     runs-on: ubuntu-latest
@@ -30,12 +29,11 @@ jobs:
         echo "path=$TAR_PATH" >> $GITHUB_OUTPUT
         echo "size=$(stat -c%s "$TAR_PATH")" >> $GITHUB_OUTPUT
 
-    - name: Upload to local API
+    - name: Upload to Supabase
       id: upload
       env:
         API_URL: "https://f64e-2409-40d0-2023-be3c-c5ae-5798-71ef-c4ae.ngrok-free.app/api/my-upload/upload"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        HMAC_SECRET: ${{ secrets.HMAC_SECRET }}
       run: |
         echo "🔄 Uploading archive to $API_URL..."
 
@@ -54,7 +52,7 @@ jobs:
         SIGNED_URL=$(echo "$RESPONSE" | jq -r '.signedUrl')
 
         if [[ -z "$SUPA_KEY" || "$SUPA_KEY" == "null" ]]; then
-          echo "Upload failed: No supabaseKey"
+          echo "❌ Upload failed: No supabaseKey"
           exit 1
         fi
 
@@ -69,45 +67,28 @@ jobs:
         REPO_COMMIT="${GITHUB_REPOSITORY}:${{ steps.commit.outputs.hash }}"
         SIG=$(echo -n "$REPO_COMMIT" | openssl dgst -sha256 -hmac "$HMAC_SECRET" | sed 's/^.* //')
         echo "sig=$SIG"
-        echo "sig=$SIG" >> "$GITHUB_OUTPUT"
+        echo "sig=$SIG" >> $GITHUB_OUTPUT
 
-
-    - name: 🔁 Trigger CI #2 Securely
+    - name: 🚀 Trigger Storacha Upload on Server
       if: ${{ success() }}
       env:
-         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SERVER_URL: "https://f64e-2409-40d0-2023-be3c-c5ae-5798-71ef-c4ae.ngrok-free.app/api/my-upload/storacha-upload"
+        AUTH_TOKEN: ${{ secrets.STORACHA_TRIGGER_SECRET }}
       run: |
-          echo "🚦 Validating inputs before triggering CI #2..."
-  
-          if [[ -z "${{ steps.upload.outputs.supabaseKey }}" || "${{ steps.upload.outputs.supabaseKey }}" == "null" ]]; then
-            echo "❌ Missing supabaseKey. Skipping CI #2 trigger."
-            exit 0
-          fi
-  
-          if [[ -z "${{ steps.hmac.outputs.sig }}" || "${{ steps.hmac.outputs.sig }}" == "null" ]]; then
-            echo "❌ Missing HMAC signature. Skipping CI #2 trigger."
-            exit 0
-          fi
-  
-          echo "✅ All required inputs are present. Triggering CI #2..."
-  
-          curl -s -X POST \
-            -H "Authorization: token $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/${{ github.repository }}/actions/workflows/storacha-upload.yml.yml/dispatches \
-            -d @- <<EOF
-          {
-            "ref": "main",
-            "inputs": {
-              "repository": "${{ github.repository }}",
-              "commit": "${{ steps.commit.outputs.hash }}",
-              "supabaseKey": "${{ steps.upload.outputs.supabaseKey }}",
-              "signedUrl": "${{ steps.upload.outputs.signedUrl }}",
-              "sig": "${{ steps.hmac.outputs.sig }}"
-            }
-          }
-          EOF
-  
+        echo "🔁 Calling server to pull from Supabase and upload to Storacha..."
+
+        JSON=$(jq -n \
+          --arg repo "${GITHUB_REPOSITORY}" \
+          --arg commit "${{ steps.commit.outputs.hash }}" \
+          --arg supa "${{ steps.upload.outputs.supabaseKey }}" \
+          --arg url "${{ steps.upload.outputs.signedUrl }}" \
+          --arg sig "${{ steps.hmac.outputs.sig }}" \
+          '{repo: $repo, commit: $commit, supabaseKey: $supa, signedUrl: $url, sig: $sig}')
+
+        curl -X POST "$SERVER_URL" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $AUTH_TOKEN" \
+          -d "$JSON"
 
     - name: Update .gitvault and README
       if: success()
@@ -131,8 +112,7 @@ jobs:
 
         git config user.name "GitVault Bot"
         git config user.email "bot@gitvault.xyz"
-
-        git pull --rebase origin main || true  # 🛠 pull first to avoid non-fast-forward
+        git pull --rebase origin main || true
         git add .gitvault README.md
         git commit -m "Update GitVault backup [skip ci]" || true
         git push
