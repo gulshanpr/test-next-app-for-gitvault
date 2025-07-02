@@ -82,6 +82,8 @@ jobs:
 
         git config user.name "GitVault Bot"
         git config user.email "bot@gitvault.xyz"
+
+        git pull --rebase origin main || true  # 🛠 pull first to avoid non-fast-forward
         git add .gitvault README.md
         git commit -m "Update GitVault backup [skip ci]" || true
         git push
