@@ -33,7 +33,7 @@ jobs:
       - name: Upload to local API
         id: upload
         env:
-          API_URL: "http://localhost:3000/api/my-upload/upload"
+          API_URL: "https://4941-2409-40d0-2023-be3c-c5ae-5798-71ef-c4ae.ngrok-free.app/api/my-upload/upload"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "🔄 Uploading archive to $API_URL..."
