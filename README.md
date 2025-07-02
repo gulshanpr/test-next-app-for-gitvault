@@ -1,3 +1,4 @@
+[![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)](https://ipfs.io/ipfs/bafybeifakecid1751463585591)
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
