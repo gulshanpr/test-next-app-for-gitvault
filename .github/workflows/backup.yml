@@ -2,8 +2,9 @@ name: GitVault
 
 on:
   push:
-    branches: [main, master]
+    branches: [ main, master ]
   workflow_dispatch:
+
 
 jobs:
   backup:
@@ -12,73 +13,75 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Get commit hash
-        id: commit
-        run: echo "hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+    - name: Get commit hash
+      id: commit
+      run: echo "hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Create tarball of entire repo
-        id: archive
-        run: |
-          mkdir -p backup-temp
-          TAR_PATH="backup-temp/repo.tar.gz"
-          tar --exclude='.git' -czf "$TAR_PATH" .
-          echo "path=$TAR_PATH" >> $GITHUB_OUTPUT
-          echo "size=$(stat -c%s "$TAR_PATH")" >> $GITHUB_OUTPUT
+    - name: Create tarball of entire repo
+      id: archive
+      run: |
+        TAR_PATH="/tmp/repo.tar.gz"
+        tar --exclude='.git' --exclude='*.tar.gz' -czf "$TAR_PATH" .
+        echo "path=$TAR_PATH" >> $GITHUB_OUTPUT
+        echo "size=$(stat -c%s "$TAR_PATH")" >> $GITHUB_OUTPUT
 
-      - name: Upload to local API
-        id: upload
-        env:
-          API_URL: "http://localhost:3000/api/my-upload/upload"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "🔄 Uploading archive to $API_URL..."
+    - name: Upload to local API
+      id: upload
+      env:
+        API_URL: "https://your-ngrok-url/api/my-upload/upload"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "🔄 Uploading archive to $API_URL..."
 
-          RESPONSE=$(curl -s -X POST "$API_URL" \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "X-GitHub-Repository: $GITHUB_REPOSITORY" \
-            -H "X-GitHub-Commit-Hash: ${{ steps.commit.outputs.hash }}" \
-            -H "X-GitHub-Run-Id: $GITHUB_RUN_ID" \
-            -H "X-Backup-Owner: ${{ github.repository_owner }}" \
-            -F "file=@${{ steps.archive.outputs.path }}" \
-            --retry 3 --retry-delay 2)
+        RESPONSE=$(curl -s -X POST "$API_URL" \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "X-GitHub-Repository: $GITHUB_REPOSITORY" \
+          -H "X-GitHub-Commit-Hash: ${{ steps.commit.outputs.hash }}" \
+          -H "X-GitHub-Run-Id: $GITHUB_RUN_ID" \
+          -H "X-Backup-Owner: ${{ github.repository_owner }}" \
+          -F "file=@${{ steps.archive.outputs.path }}" \
+          --retry 3 --retry-delay 2)
 
-          echo "📦 Upload response: $RESPONSE"
+        echo "📦 Upload response: $RESPONSE"
 
-          CID=$(echo "$RESPONSE" | jq -r '.cid')
-          if [[ -z "$CID" || "$CID" == "null" ]]; then
-            echo "Upload failed or no CID received"
-            exit 1
-          fi
+        SUPA_KEY=$(echo "$RESPONSE" | jq -r '.supabaseKey')
+        SIGNED_URL=$(echo "$RESPONSE" | jq -r '.signedUrl')
 
-          echo "cid=$CID" >> $GITHUB_OUTPUT
+        if [[ -z "$SUPA_KEY" || "$SUPA_KEY" == "null" ]]; then
+          echo "Upload failed: No supabaseKey"
+          exit 1
+        fi
 
-      - name: Update .gitvault and README
-        if: success()
-        run: |
-          if [ ! -f .gitvault ]; then
-            echo "repository:" > .gitvault
-            echo "  name: $GITHUB_REPOSITORY" >> .gitvault
-            echo "backups:" >> .gitvault
-          fi
+        echo "supabaseKey=$SUPA_KEY" >> $GITHUB_OUTPUT
+        echo "signedUrl=$SIGNED_URL" >> $GITHUB_OUTPUT
 
-          echo "- cid: ${{ steps.upload.outputs.cid }}" >> .gitvault
-          echo "  date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> .gitvault
-          echo "  commit: ${{ steps.commit.outputs.hash }}" >> .gitvault
+    - name: Update .gitvault and README
+      if: success()
+      run: |
+        if [ ! -f .gitvault ]; then
+          echo "repository:" > .gitvault
+          echo "  name: $GITHUB_REPOSITORY" >> .gitvault
+          echo "backups:" >> .gitvault
+        fi
 
-          if [ -f README.md ]; then
-            sed -i '/\[!\[GitVault Backup/d' README.md
-            sed -i "1i [![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)](https://ipfs.io/ipfs/${{ steps.upload.outputs.cid }})" README.md
-          else
-            echo "[![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)](https://ipfs.io/ipfs/${{ steps.upload.outputs.cid }})" > README.md
-          fi
+        echo "- cid: PLACEHOLDER_CID" >> .gitvault
+        echo "  date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> .gitvault
+        echo "  commit: ${{ steps.commit.outputs.hash }}" >> .gitvault
 
-          git config user.name "GitVault Bot"
-          git config user.email "bot@gitvault.xyz"
-          git add .gitvault README.md
-          git commit -m "Update GitVault backup [skip ci]" || true
-          git push
+        if [ -f README.md ]; then
+          sed -i '/\[!\[GitVault Backup/d' README.md
+          sed -i "1i [![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)](https://ipfs.io/ipfs/PLACEHOLDER_CID)" README.md
+        else
+          echo "[![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)](https://ipfs.io/ipfs/PLACEHOLDER_CID)" > README.md
+        fi
+
+        git config user.name "GitVault Bot"
+        git config user.email "bot@gitvault.xyz"
+        git add .gitvault README.md
+        git commit -m "Update GitVault backup [skip ci]" || true
+        git push
