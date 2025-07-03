@@ -1,4 +1,4 @@
-[![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)](https://ipfs.io/ipfs/PLACEHOLDER_CID)
+[![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)](https://w3s.link/ipfs/bafybeiacx6ubiqvhseydlscknih7zamolommbts2batvzxm3tu2yzngdzq)
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
