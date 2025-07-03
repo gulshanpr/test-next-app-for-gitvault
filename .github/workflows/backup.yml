@@ -32,7 +32,7 @@ jobs:
     - name: Upload to Supabase
       id: upload
       env:
-        API_URL: "https://f64e-2409-40d0-2023-be3c-c5ae-5798-71ef-c4ae.ngrok-free.app/api/my-upload/upload"
+        API_URL: "https://4057-2409-40d0-1000-be8d-ba3d-7522-a11d-4d93.ngrok-free.app/api/my-upload/upload"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "🔄 Uploading archive to $API_URL..."
@@ -70,10 +70,12 @@ jobs:
         echo "sig=$SIG" >> $GITHUB_OUTPUT
 
     - name: 🚀 Trigger Storacha Upload on Server
+      id: storacha
       if: ${{ success() }}
       env:
-        SERVER_URL: "https://f64e-2409-40d0-2023-be3c-c5ae-5798-71ef-c4ae.ngrok-free.app/api/my-upload/storacha-upload"
+        SERVER_URL: "https://4057-2409-40d0-1000-be8d-ba3d-7522-a11d-4d93.ngrok-free.app/api/my-upload/storacha-upload"
         AUTH_TOKEN: ${{ secrets.STORACHA_TRIGGER_SECRET }}
+
       run: |
         echo "🔁 Calling server to pull from Supabase and upload to Storacha..."
 
@@ -85,29 +87,45 @@ jobs:
           --arg sig "${{ steps.hmac.outputs.sig }}" \
           '{repo: $repo, commit: $commit, supabaseKey: $supa, signedUrl: $url, sig: $sig}')
 
-        curl -X POST "$SERVER_URL" \
+        RESPONSE=$(curl -s -X POST "$SERVER_URL" \
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer $AUTH_TOKEN" \
-          -d "$JSON"
+          -d "$JSON")
+
+        echo "🌐 Storacha response: $RESPONSE"
+
+        CID=$(echo "$RESPONSE" | jq -r '.cid')
+        IPFS_URL=$(echo "$RESPONSE" | jq -r '.url')
+
+        if [[ "$CID" == "null" || -z "$CID" ]]; then
+          echo "❌ Failed to retrieve CID"
+          exit 1
+        fi
+
+        echo "cid=$CID" >> $GITHUB_OUTPUT
+        echo "ipfs_url=$IPFS_URL" >> $GITHUB_OUTPUT
 
     - name: Update .gitvault and README
       if: success()
       run: |
+        CID=${{ steps.storacha.outputs.cid }}
+        URL=${{ steps.storacha.outputs.ipfs_url }}
+
         if [ ! -f .gitvault ]; then
           echo "repository:" > .gitvault
           echo "  name: $GITHUB_REPOSITORY" >> .gitvault
           echo "backups:" >> .gitvault
         fi
 
-        echo "- cid: PLACEHOLDER_CID" >> .gitvault
+        echo "- cid: $CID" >> .gitvault
         echo "  date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> .gitvault
         echo "  commit: ${{ steps.commit.outputs.hash }}" >> .gitvault
 
         if [ -f README.md ]; then
           sed -i '/\[!\[GitVault Backup/d' README.md
-          sed -i "1i [![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)](https://ipfs.io/ipfs/PLACEHOLDER_CID)" README.md
+          sed -i "1i [![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)]($URL)" README.md
         else
-          echo "[![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)](https://ipfs.io/ipfs/PLACEHOLDER_CID)" > README.md
+          echo "[![GitVault Backup](https://img.shields.io/badge/GitVault-Protected-blue)]($URL)" > README.md
         fi
 
         git config user.name "GitVault Bot"
@@ -116,3 +134,4 @@ jobs:
         git add .gitvault README.md
         git commit -m "Update GitVault backup [skip ci]" || true
         git push
+
