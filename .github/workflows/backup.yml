@@ -104,18 +104,29 @@ jobs:
 
         echo "cid=$CID" >> $GITHUB_OUTPUT
         echo "ipfs_url=$IPFS_URL" >> $GITHUB_OUTPUT
+
+
     - name: 🗑️ Delete temp from Supabase
       if: always()
       env:
-        DELETE_URL: " https://4057-2409-40d0-1000-be8d-ba3d-7522-a11d-4d93.ngrok-free.app/api/my-upload/delete"
+        DELETE_URL: "https://4057-2409-40d0-1000-be8d-ba3d-7522-a11d-4d93.ngrok-free.app/api/my-upload/delete"
         DELETE_SECRET: ${{ secrets.SUPABASE_DELETE_SECRET }}
       run: |
         echo "🧹 Cleaning up Supabase temp file..."
-  
-        curl -s -X POST "$DELETE_URL" \
+
+        DELETE_RESPONSE=$(curl --fail -s -X POST "$DELETE_URL" \
           -H "Authorization: Bearer $DELETE_SECRET" \
           -H "Content-Type: application/json" \
-          -d "{\"key\": \"${{ steps.upload.outputs.supabaseKey }}\"}"
+          -d "{\"key\": \"${{ steps.upload.outputs.supabaseKey }}\"}")
+
+        STATUS=$?
+
+        echo "🧾 Delete response: $DELETE_RESPONSE"
+
+        if [[ $STATUS -ne 0 ]]; then
+          echo "❌ Supabase deletion failed (HTTP error or bad URL)"
+          exit 1
+        fi
 
     - name: Update .gitvault and README
       if: success()
