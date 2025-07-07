@@ -32,7 +32,7 @@ jobs:
     - name: Upload to Supabase
       id: upload
       env:
-        API_URL: "https://4057-2409-40d0-1000-be8d-ba3d-7522-a11d-4d93.ngrok-free.app/api/my-upload/upload"
+        API_URL: "https://f85e47aa662b.ngrok-free.app/api/my-upload/upload"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "🔄 Uploading archive to $API_URL..."
@@ -61,7 +61,7 @@ jobs:
     - name: 🚀 Trigger Storacha Upload on Server
       id: storacha
       env:
-        SERVER_URL: "https://4057-2409-40d0-1000-be8d-ba3d-7522-a11d-4d93.ngrok-free.app/api/my-upload/storacha-upload"
+        SERVER_URL: "https://f85e47aa662b.ngrok-free.app/api/my-upload/storacha-upload"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "🔁 Calling server to pull from Supabase and upload to Storacha..."
@@ -94,7 +94,7 @@ jobs:
     - name: 🗑️ Delete temp from Supabase
       if: always()
       env:
-        DELETE_URL: "https://4057-2409-40d0-1000-be8d-ba3d-7522-a11d-4d93.ngrok-free.app/api/my-upload/delete"
+        DELETE_URL: "https://f85e47aa662b.ngrok-free.app/api/my-upload/delete"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "🧹 Cleaning up Supabase temp file..."
