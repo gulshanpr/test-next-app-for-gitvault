@@ -42,8 +42,7 @@ jobs:
           -H "X-GitHub-Repository: $GITHUB_REPOSITORY" \
           -H "X-GitHub-Commit-Hash: ${{ steps.commit.outputs.hash }}" \
           -H "X-GitHub-Run-Id: $GITHUB_RUN_ID" \
-          -F "file=@${{ steps.archive.outputs.path }}" \
-          --retry 3 --retry-delay 2)
+          -F "file=@${{ steps.archive.outputs.path }}")
 
         echo "📦 Upload response: $RESPONSE"
 
@@ -64,33 +63,36 @@ jobs:
         SERVER_URL: "https://f85e47aa662b.ngrok-free.app/api/my-upload/storacha-upload"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-          echo "🔁 Calling server to pull from Supabase and upload to Storacha..."
-      
-          JSON=$(jq -n \
-            --arg repo "${GITHUB_REPOSITORY}" \
-            --arg commit "${{ steps.commit.outputs.hash }}" \
-            --arg supa "${{ steps.upload.outputs.supabaseKey }}" \
-            --arg url "${{ steps.upload.outputs.signedUrl }}" \
-            '{repo: $repo, commit: $commit, supabaseKey: $supa, signedUrl: $url}')
-      
-          RESPONSE=$(curl -s -X POST "$SERVER_URL" \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "$JSON")
-      
-          echo "🌐 Storacha response: $RESPONSE"
-      
-          CID=$(echo "$RESPONSE" | jq -r '.cid')
-          IPFS_URL=$(echo "$RESPONSE" | jq -r '.url')
-      
-          if [[ "$CID" == "null" || -z "$CID" ]]; then
-            echo "❌ Failed to retrieve CID"
-            exit 1
-          fi
-      
-          echo "cid=$CID" >> $GITHUB_OUTPUT
-          echo "ipfs_url=$IPFS_URL" >> $GITHUB_OUTPUT
-      
+        echo "🔁 Calling server to pull from Supabase and upload to Storacha..."
+
+        JSON=$(jq -n \
+          --arg repo "${GITHUB_REPOSITORY}" \
+          --arg commit "${{ steps.commit.outputs.hash }}" \
+          --arg supa "${{ steps.upload.outputs.supabaseKey }}" \
+          --arg url "${{ steps.upload.outputs.signedUrl }}" \
+          '{repo: $repo, commit: $commit, supabaseKey: $supa, signedUrl: $url}')
+
+        RESPONSE=$(curl -s -X POST "$SERVER_URL" \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$JSON")
+
+        echo "🌐 Storacha response: $RESPONSE"
+
+        CID=$(echo "$RESPONSE" | jq -r '.cid')
+        IPFS_URL=$(echo "$RESPONSE" | jq -r '.url')
+
+        if [[ "$CID" == "null" || -z "$CID" ]]; then
+          echo "❌ Failed to retrieve CID"
+          exit 1
+        fi
+
+        echo "cid=$CID" >> $GITHUB_OUTPUT
+        echo "ipfs_url=$IPFS_URL" >> $GITHUB_OUTPUT
+
+    - name: Debug Confirm key being deleted
+      run: |
+        echo "🧹 Key that will be deleted: ${{ steps.upload.outputs.supabaseKey }}"
 
     - name: 🗑️ Delete temp from Supabase
       if: always()
@@ -98,29 +100,28 @@ jobs:
         DELETE_URL: "https://f85e47aa662b.ngrok-free.app/api/my-upload/delete"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-            echo "🧹 Cleaning up Supabase temp file..."
-        
-            JSON=$(jq -n \
-              --arg key "${{ steps.upload.outputs.supabaseKey }}" \
-              --arg repo "${{ github.repository }}" \
-              '{key: $key, repo: $repo}')
-        
-            RESPONSE=$(curl -s -w "%{http_code}" -o response.json -X POST "$DELETE_URL" \
-              -H "Authorization: Bearer $GITHUB_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "$JSON")
-        
-            HTTP_CODE=$(tail -n1 <<< "$RESPONSE")
-            BODY=$(cat response.json)
-        
-            echo "🔁 HTTP $HTTP_CODE"
-            echo "📩 Response body: $BODY"
-        
-            if [[ "$HTTP_CODE" -ne 200 ]]; then
-              echo "❌ Deletion failed with HTTP $HTTP_CODE"
-              exit 1
-            fi
-        
+        echo "🧹 Cleaning up Supabase temp file..."
+
+        JSON=$(jq -n \
+          --arg key "${{ steps.upload.outputs.supabaseKey }}" \
+          --arg repo "${{ github.repository }}" \
+          '{key: $key, repo: $repo}')
+
+        RESPONSE=$(curl -s -w "%{http_code}" -o response.json -X POST "$DELETE_URL" \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$JSON")
+
+        HTTP_CODE=$(tail -n1 <<< "$RESPONSE")
+        BODY=$(cat response.json)
+
+        echo "🔁 HTTP $HTTP_CODE"
+        echo "📩 Response body: $BODY"
+
+        if [[ "$HTTP_CODE" -ne 200 ]]; then
+          echo "❌ Deletion failed with HTTP $HTTP_CODE"
+          exit 1
+        fi
 
     - name: Update .gitvault and README
       if: success()
@@ -147,10 +148,8 @@ jobs:
 
         git config user.name "GitVault Bot"
         git config user.email "bot@gitvault.xyz"
-
         git fetch origin main
         git reset --hard origin/main
-
         git add .gitvault README.md
         git commit -m "Update GitVault backup [skip ci]" || echo "✅ Nothing to commit"
         git push origin main
