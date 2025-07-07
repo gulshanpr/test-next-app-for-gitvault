@@ -64,32 +64,33 @@ jobs:
         SERVER_URL: "https://f85e47aa662b.ngrok-free.app/api/my-upload/storacha-upload"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo "🔁 Calling server to pull from Supabase and upload to Storacha..."
-
-        JSON=$(jq -n \
-          --arg repo "${GITHUB_REPOSITORY}" \
-          --arg commit "${{ steps.commit.outputs.hash }}" \
-          --arg supa "${{ steps.upload.outputs.supabaseKey }}" \
-          --arg url "${{ steps.upload.outputs.signedUrl }}" \
-          '{repo: $repo, commit: $commit, supabaseKey: $supa, signedUrl: $url}')
-
-        RESPONSE=$(curl -s -X POST "$SERVER_URL" \
-          -H "Authorization: Bearer $GITHUB_TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "$JSON")
-
-        echo "🌐 Storacha response: $RESPONSE"
-
-        CID=$(echo "$RESPONSE" | jq -r '.cid')
-        IPFS_URL=$(echo "$RESPONSE" | jq -r '.url')
-
-        if [[ "$CID" == "null" || -z "$CID" ]]; then
-          echo "❌ Failed to retrieve CID"
-          exit 1
-        fi
-
-        echo "cid=$CID" >> $GITHUB_OUTPUT
-        echo "ipfs_url=$IPFS_URL" >> $GITHUB_OUTPUT
+          echo "🔁 Calling server to pull from Supabase and upload to Storacha..."
+      
+          JSON=$(jq -n \
+            --arg repo "${GITHUB_REPOSITORY}" \
+            --arg commit "${{ steps.commit.outputs.hash }}" \
+            --arg supa "${{ steps.upload.outputs.supabaseKey }}" \
+            --arg url "${{ steps.upload.outputs.signedUrl }}" \
+            '{repo: $repo, commit: $commit, supabaseKey: $supa, signedUrl: $url}')
+      
+          RESPONSE=$(curl -s -X POST "$SERVER_URL" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$JSON")
+      
+          echo "🌐 Storacha response: $RESPONSE"
+      
+          CID=$(echo "$RESPONSE" | jq -r '.cid')
+          IPFS_URL=$(echo "$RESPONSE" | jq -r '.url')
+      
+          if [[ "$CID" == "null" || -z "$CID" ]]; then
+            echo "❌ Failed to retrieve CID"
+            exit 1
+          fi
+      
+          echo "cid=$CID" >> $GITHUB_OUTPUT
+          echo "ipfs_url=$IPFS_URL" >> $GITHUB_OUTPUT
+      
 
     - name: 🗑️ Delete temp from Supabase
       if: always()
