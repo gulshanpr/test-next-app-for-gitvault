@@ -98,25 +98,29 @@ jobs:
         DELETE_URL: "https://f85e47aa662b.ngrok-free.app/api/my-upload/delete"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        echo "🧹 Cleaning up Supabase temp file..."
-
-        JSON=$(jq -n --arg key "${{ steps.upload.outputs.supabaseKey }}" '{key: $key, repo: "${{ github.repository }}"}')
-
-        RESPONSE=$(curl -s -w "%{http_code}" -o response.json -X POST "$DELETE_URL" \
-          -H "Authorization: Bearer $GITHUB_TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "$JSON")
-
-        HTTP_CODE=$(tail -n1 <<< "$RESPONSE")
-        BODY=$(cat response.json)
-
-        echo "🔁 HTTP $HTTP_CODE"
-        echo "📩 Response body: $BODY"
-
-        if [[ "$HTTP_CODE" -ne 200 ]]; then
-          echo "❌ Deletion failed with HTTP $HTTP_CODE"
-          exit 1
-        fi
+            echo "🧹 Cleaning up Supabase temp file..."
+        
+            JSON=$(jq -n \
+              --arg key "${{ steps.upload.outputs.supabaseKey }}" \
+              --arg repo "${{ github.repository }}" \
+              '{key: $key, repo: $repo}')
+        
+            RESPONSE=$(curl -s -w "%{http_code}" -o response.json -X POST "$DELETE_URL" \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$JSON")
+        
+            HTTP_CODE=$(tail -n1 <<< "$RESPONSE")
+            BODY=$(cat response.json)
+        
+            echo "🔁 HTTP $HTTP_CODE"
+            echo "📩 Response body: $BODY"
+        
+            if [[ "$HTTP_CODE" -ne 200 ]]; then
+              echo "❌ Deletion failed with HTTP $HTTP_CODE"
+              exit 1
+            fi
+        
 
     - name: Update .gitvault and README
       if: success()
