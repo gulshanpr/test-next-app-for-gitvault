@@ -53,7 +53,7 @@ jobs:
     - name: Upload to Storacha (w3up)
       id: storacha
       env:
-        SERVER_URL: "https://326d22fcdd6d.ngrok-free.app/api/ci-upload/storacha-upload"
+        SERVER_URL: "https://5cc383b2efa7.ngrok-free.app/api/ci-upload/storacha-upload"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         echo "🚀 Uploading to Storacha..."
