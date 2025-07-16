@@ -21,8 +21,12 @@ jobs:
       id: commit
       run: echo "hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-    - name: Generate dummy data (~2 GiB)
-      run: bash generate_dummy.sh
+    - name: Generate dummy data (~40MB for test)
+      run: |
+        mkdir -p dummy_data
+        for i in {1..4}; do
+          dd if=/dev/zero of="dummy_data/file_$i.bin" bs=10M count=1 status=none
+        done
 
     - name: Create tarball of entire repo
       id: archive
@@ -37,78 +41,31 @@ jobs:
         echo "path=$TAR_PATH" >> $GITHUB_OUTPUT
         echo "size=$SIZE_BYTES" >> $GITHUB_OUTPUT
 
-
-    - name: Upload to Supabase
-      id: upload
-      env:
-        API_URL: "https://326d22fcdd6d.ngrok-free.app/api/ci-upload/upload"
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        RESPONSE=$(curl -s -X POST "$API_URL" \
-          -H "Authorization: Bearer $GITHUB_TOKEN" \
-          -H "X-GitHub-Repository: $GITHUB_REPOSITORY" \
-          -H "X-GitHub-Commit-Hash: ${{ steps.commit.outputs.hash }}" \
-          -H "X-GitHub-Run-Id: $GITHUB_RUN_ID" \
-          -F "file=@${{ steps.archive.outputs.path }}")
-
-        SUPA_KEY=$(echo "$RESPONSE" | jq -r '.supabaseKey')
-        SIGNED_URL=$(echo "$RESPONSE" | jq -r '.signedUrl')
-
-        if [[ -z "$SUPA_KEY" || "$SUPA_KEY" == "null" ]]; then
-          exit 1
-        fi
-
-        echo "supabaseKey=$SUPA_KEY" >> $GITHUB_OUTPUT
-        echo "signedUrl=$SIGNED_URL" >> $GITHUB_OUTPUT
-
-    - name: Trigger Storacha Upload on Server
+    - name: Upload to Storacha (w3up)
       id: storacha
       env:
         SERVER_URL: "https://326d22fcdd6d.ngrok-free.app/api/ci-upload/storacha-upload"
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        JSON=$(jq -n \
-          --arg repo "${GITHUB_REPOSITORY}" \
-          --arg commit "${{ steps.commit.outputs.hash }}" \
-          --arg supa "${{ steps.upload.outputs.supabaseKey }}" \
-          --arg url "${{ steps.upload.outputs.signedUrl }}" \
-          '{repo: $repo, commit: $commit, supabaseKey: $supa, signedUrl: $url}')
-
+        echo "🚀 Uploading to Storacha..."
         RESPONSE=$(curl -s -X POST "$SERVER_URL" \
           -H "Authorization: Bearer $GITHUB_TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "$JSON")
+          -F "repo=${GITHUB_REPOSITORY}" \
+          -F "commit=${{ steps.commit.outputs.hash }}" \
+          -F "file=@${{ steps.archive.outputs.path }}")
+
+        echo "$RESPONSE"
 
         CID=$(echo "$RESPONSE" | jq -r '.cid')
         IPFS_URL=$(echo "$RESPONSE" | jq -r '.url')
 
         if [[ "$CID" == "null" || -z "$CID" ]]; then
+          echo "❌ Upload failed. No CID returned."
           exit 1
         fi
 
         echo "cid=$CID" >> $GITHUB_OUTPUT
         echo "ipfs_url=$IPFS_URL" >> $GITHUB_OUTPUT
-
-    - name: Delete temp from Supabase
-      if: always()
-      env:
-        DELETE_URL: "https://326d22fcdd6d.ngrok-free.app/api/ci-upload/delete"
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        JSON=$(jq -n \
-          --arg key "${{ steps.upload.outputs.supabaseKey }}" \
-          --arg repo "${{ github.repository }}" \
-          '{key: $key, repo: $repo}')
-
-        RESPONSE=$(curl -s -w "%{http_code}" -o response.json -X POST "$DELETE_URL" \
-          -H "Authorization: Bearer $GITHUB_TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "$JSON")
-
-        HTTP_CODE=$(tail -n1 <<< "$RESPONSE")
-        if [[ "$HTTP_CODE" -ne 200 ]]; then
-          exit 1
-        fi
 
     - name: Update .gitvault and README
       if: success()
