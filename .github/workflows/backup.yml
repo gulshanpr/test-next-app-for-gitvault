@@ -24,8 +24,8 @@ jobs:
     - name: Generate dummy data (~40MB for test)
       run: |
         mkdir -p dummy_data
-        for i in {1..4}; do
-          dd if=/dev/zero of="dummy_data/file_$i.bin" bs=10M count=1 status=none
+        for i in {1..20}; do
+          dd if=/dev/zero of="dummy_data/file_$i.bin" bs=100M count=1 status=none
         done
 
     - name: Create tarball of entire repo
