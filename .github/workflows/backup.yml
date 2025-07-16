@@ -21,14 +21,16 @@ jobs:
       id: commit
       run: echo "hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-    - name: Generate dummy data (~2 GiB)
+    - name: Generate dummy data (~2 GiB real size)
       run: |
-        echo "Creating dummy files in: $(pwd)"
+        echo "Creating random dummy files in: $(pwd)"
         mkdir -p dummy_data
         for i in {1..20}; do
-          dd if=/dev/zero of="dummy_data/file_$i.bin" bs=100M count=1 status=none
+          head -c 100M </dev/urandom > dummy_data/file_$i.bin
         done
+        echo "✅ Created files:"
         du -sh dummy_data
+
 
     - name: Check total size before tar
       run: |
